@@ -1,7 +1,8 @@
-﻿using CommonServiceLocator;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Configuration;
+using Microsoft.Extensions.Logging.Console;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -27,7 +28,6 @@ namespace UnoGenericHost
 	/// </summary>
 	sealed partial class App : Application
 	{
-		ILoggerFactory UnoLoggerFactory { get; }
 		IHost AppHost { get; }
 
 		/// <summary>
@@ -36,7 +36,6 @@ namespace UnoGenericHost
 		/// </summary>
 		public App()
 		{
-			UnoLoggerFactory = global::Uno.Extensions.LogExtensionPoint.AmbientLoggerFactory;
 			AppHost = Host
 				.CreateDefaultBuilder()
 				.ConfigureLogging(loggingBuilder =>
@@ -44,7 +43,6 @@ namespace UnoGenericHost
 					loggingBuilder.ClearProviders();
 
 					loggingBuilder
-						.AddProvider(new UnoLoggerProvider(UnoLoggerFactory))
 						.AddFilter("Uno", LogLevel.Warning)
 						.AddFilter("Windows", LogLevel.Warning)
 
@@ -81,8 +79,8 @@ namespace UnoGenericHost
 						// .AddFilter("Windows.UI.Xaml.Controls.BufferViewCache", LogLevel.Debug) //Android
 						// .AddFilter("Windows.UI.Xaml.Controls.VirtualizingPanelGenerator", LogLevel.Debug) //WASM
 						.AddConsole()
-						.AddDebug()
 #if DEBUG
+						.AddDebug()
 						.SetMinimumLevel(LogLevel.Debug);
 #else
 						.SetMinimumLevel(LogLevel.Information);
@@ -95,13 +93,15 @@ namespace UnoGenericHost
 				})
 				.Build();
 
+			LogExtensionPoint.AmbientLoggerFactory.AddProviders(AppHost.Services);
+
 			AppHost.Start();
 
 			this.InitializeComponent();
 
 			var logger = AppHost.Services.GetRequiredService<ILogger<App>>();
 			logger.LogError("*********************************");
-			this.Log().LogError("*********************************");			
+			this.Log().LogError("*********************************");
 
 			this.Suspending += OnSuspending;
 		}
@@ -178,12 +178,11 @@ namespace UnoGenericHost
 		}
 	}
 
-	class UnoLoggerProvider : ILoggerProvider
+	public static class UnoLoggerExtensions
 	{
-		readonly ILoggerFactory loggerFactory;
-		public UnoLoggerProvider(ILoggerFactory loggerFactory) => this.loggerFactory = loggerFactory;
-		public ILogger CreateLogger(string categoryName) => loggerFactory.CreateLogger(categoryName);
-		public void Dispose() => loggerFactory.Dispose();
+		public static void AddProviders(this ILoggerFactory unoLoggerFactory, IServiceProvider services)
+		{			
+				unoLoggerFactory.AddProvider(services.GetRequiredService<ILoggerProvider>());
+		}
 	}
-
 }
